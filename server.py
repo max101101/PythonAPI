@@ -2,27 +2,18 @@
 """
 server.py -- http api server
 ========================
-Http api server for smg client
-Provides auth and notebook api
-Validates game state
+Http api server
 """
 
 
 import sqlite3
-#from multiprocessing import Process
 from time import time
-from uuid import uuid1
-
 from flask import Flask, jsonify, abort, request, make_response, g
-from flask_httpauth import HTTPBasicAuth
-from werkzeug.security import generate_password_hash, check_password_hash
 
 import database
 import properties
 
 APP = Flask(__name__)
-AUTH = HTTPBasicAuth()
-
 
 def conn_get():
     """Return DB connection, creates connection if needed"""
@@ -42,13 +33,6 @@ def conn_close(_):
     conn = getattr(g, '_database', None)
     if conn is not None:
         conn.close()
-
-
-@AUTH.error_handler
-def forbidden():
-    """403 status wrapper"""
-
-    return make_response(jsonify({'error': 'Forbidden'}), 403)
 
 
 @APP.errorhandler(400)
@@ -85,248 +69,65 @@ def internal(_):
     return make_response(jsonify({'error': 'Internal Error'}), 500)
 
 
-@AUTH.verify_password
-def verify_password(username, password):
-    """Validate password"""
-
-    conn = conn_get()
-    user = database.get_user(conn, username)
-    if user is None:
-        return False
-
-    return check_password_hash(user['password'], password)
-
-
-@APP.route('/api/v1/health_check', methods=['GET'])
-def health_check():
+@APP.route('/api/v1/add_favourite', methods=['POST'])
+def add_favourite():
     """
-    Api.health_check method
-    returns status "ok" or fails
-    """
-
-    return jsonify({"status": "ok"})
-
-
-@APP.route('/api/v1/auth', methods=['GET'])
-@AUTH.login_required
-def authenticate():
-    """
-    Api.auth method
-    arguments: []
-    returns: empty body
-    200 -- auth success
-    403 -- wrong authorization
-    500 -- internal error
-    """
-
-    return ""
-
-
-@APP.route('/api/v1/auth', methods=['PUT'])
-def register():
-    """
-    Api.register method
-    arguments: [username, password]
-    returns: empty body
-    201 -- registration success
-    400 -- wrong arguments
-    409 -- username exists
-    500 -- internal error
-    """
-
-    if not request.json \
-            or not 'username' in request.json or len(request.json['username']) == 0 \
-            or not 'password' in request.json or len(request.json['password']) == 0:
-        abort(400)
-
-    if not request.json['username'].isalnum() or not request.json['password'].isalnum():
-        abort(400)
-
-    print(request.json['password'])
-
-    conn = conn_get()
-    user = database.get_user(conn, request.json['username'])
-    if user is not None:
-        abort(409)
-
-    user = {
-        'username': request.json['username'],
-        'password': generate_password_hash(request.json['password']),
-    }
-    database.add_user(conn, user)
-    conn.commit()
-
-    return "", 201
-
-
-@APP.route('/api/v1/auth', methods=['POST'])
-@AUTH.login_required
-def change_password():
-    """
-    Api.change_password method
-    arguments: [password]
-    returns: empty body
-    200 -- password changed
-    400 -- wrong arguments
-    403 -- wrong authorization
-    500 -- internal error
-    """
-
-    if not request.json or not 'password' in request.json or len(request.json['password']) == 0:
-        abort(400)
-
-    if not request.json['password'].isalnum():
-        abort(400)
-
-    conn = conn_get()
-    user = database.get_user(conn, AUTH.username())
-    user['password'] = generate_password_hash(request.json['password'])
-    database.update_user(conn, user)
-    conn.commit()
-
-    return ""
-
-
-@APP.route('/api/v1/note', methods=['PUT'])
-@AUTH.login_required
-def create_note():
-    """
-    Api.create_note method
-    arguments: [title, text]
-    returns: [uuid, user, ctime, atime, title, text]
+    Api.add_favourite method
+    arguments: [userid, matchid]
+    returns: []
     201 -- note created
     400 -- wrong arguments
-    403 -- wrong authorization
     500 -- internal error
     """
 
-    if not request.json or not 'text' in request.json or not 'title' in request.json:
+    if not request.json or not 'userid' in request.json or not 'matchid' in request.json:
         abort(400)
 
     conn = conn_get()
-    note = {
-        'uuid':  str(uuid1()),
-        'user':  AUTH.username(),
-        'ctime': int(time()),
-        'atime': int(time()),
-        'title': request.json["title"],
-        'text':  request.json["text"]
-    }
-    database.add_note(conn, note)
+    database.add_favourite(conn, request.json["userid"], request.json["matchid"])
     conn.commit()
 
-    return jsonify(note), 201
+    return jsonify({}), 200
 
 
-@APP.route('/api/v1/note', methods=['GET'])
-@AUTH.login_required
-def get_notes():
+@APP.route('/api/v1/get_favourite', methods=['POST'])
+def get_favourite():
     """
-    Api.get_notes method
-    arguments: [limit, offset]
-    returns: [[uuid, user, ctime, atime, title, text]]
+    Api.get_favourite method
+    arguments: [userid]
+    returns: [[id, userid, matchid]]
     200 -- ok
     400 -- wrong arguments
-    403 -- wrong authorization
     500 -- internal error
     """
-
-    limit = int(request.args.get('limit'))
-    if limit is None or limit < 0 or limit > 100:
-        limit = 20
-
-    offset = int(request.args.get('offset'))
-    if offset is None or offset < 0:
-        offset = 0
-
-    conn = conn_get()
-    notes = database.get_notes(conn, AUTH.username(), limit, offset)
-    conn.commit()
-
-    return jsonify(notes)
-
-
-@APP.route('/api/v1/note/<string:uuid>', methods=['GET'])
-@AUTH.login_required
-def get_note(uuid):
-    """
-    Api.get_note method
-    returns: [uuid, user, ctime, atime, title, text]
-    200 -- ok
-    403 -- wrong authorization
-    404 -- note not found
-    500 -- internal error
-    """
-
-    conn = conn_get()
-    note = database.get_note(conn, uuid)
-    if note is None:
-        abort(404)
-
-    if AUTH.username() != note["user"]:
-        abort(403)
-
-    return jsonify(note)
-
-
-@APP.route('/api/v1/note/<string:uuid>', methods=['POST'])
-@AUTH.login_required
-def update_note(uuid):
-    """
-    Api.update_note method
-    arguments: [title, text]
-    returns: [uuid, user, ctime, atime, title, text]
-    200 -- note updated
-    400 -- wrong arguments
-    403 -- wrong authorization
-    404 -- note not found
-    500 -- internal error
-    """
-
-    conn = conn_get()
-    note = database.get_note(conn, uuid)
-    if note is None:
-        abort(404)
-
-    if AUTH.username() != note["user"]:
-        abort(403)
-
-    if not request.json or not 'text' in request.json or not 'title' in request.json:
+    if not request.json or not 'userid' in request.json:
         abort(400)
 
-    note["atime"] = int(time())
-    note["title"] = request.json["title"]
-    note["text"] = request.json["text"]
-    database.update_note(conn, note)
+    conn = conn_get()
+    favourites = database.get_favourites_by_userid(conn, request.json['userid'])
     conn.commit()
 
-    return jsonify(note)
+    return jsonify(favourites)
 
 
-@APP.route('/api/v1/note/<string:uuid>', methods=['DELETE'])
-@AUTH.login_required
-def delete_note(uuid):
+@APP.route('/api/v1/delete_favourite', methods=['POST'])
+def delete_favourite():
     """
-    Api.update_note method
-    returns: empty body
-    204 -- note deleted
-    403 -- wrong authorization
-    404 -- note not found
+    Api.delete_favourite method
+    arguments: [id]
+    returns: []
+    200 -- ok
+    400 -- wrong arguments
     500 -- internal error
     """
+    if not request.json or not 'id' in request.json:
+        abort(400)
 
     conn = conn_get()
-    note = database.get_note(conn, uuid)
-    if note is None:
-        abort(404)
-
-    if AUTH.username() != note["user"]:
-        abort(403)
-
-    database.delete_note(conn, note["uuid"])
+    database.delete_favourite(conn, request.json['id'])
     conn.commit()
 
-    return "", 204
+    return jsonify({})
 
 
 if __name__ == '__main__':

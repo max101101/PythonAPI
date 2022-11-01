@@ -20,88 +20,42 @@ def init(conn):
     """"Initializes DB state"""
 
     cursor = conn.cursor()
-    cursor.execute(sql.CREATE_USERS)
-    cursor.execute(sql.CREATE_NOTES)
+    cursor.execute(sql.CREATE_FAVOURITES)
     conn.commit()
     conn.close()
 
 
-def get_user(conn, username):
-    """get user by username"""
+def get_favourites_by_userid(conn, userid):
+    """get favourites by userid"""
 
     cursor = conn.cursor()
-    cursor.execute(sql.SELECT_USER, (username,))
-    return cursor.fetchone()
-
-
-def add_user(conn, user):
-    """add new user"""
-
-    cursor = conn.cursor()
-    cursor.execute(sql.INSERT_USER, (user['username'], user['password']))
-
-
-def update_user(conn, user):
-    """update existing user"""
-
-    cursor = conn.cursor()
-    cursor.execute(sql.UPDATE_USER, (
-        user['password'],
-        user['username']
-    ))
-
-def get_note(conn, uuid):
-    """get note by uuid"""
-
-    cursor = conn.cursor()
-    cursor.execute(sql.SELECT_NOTE, (uuid,))
-    note = cursor.fetchone()
-    if note is None:
+    cursor.execute(sql.SELECT_BY_USER, (userid,))
+    favourites = cursor.fetchall()
+    if favourites is None:
         return None
 
-    return note
+    return favourites
 
-def get_notes(conn, username, limit, offset):
-    """get notes by username"""
+def get_favourites_by_matchid(conn, matchid):
+    """get favourites by matchid"""
 
     cursor = conn.cursor()
-    cursor.execute(sql.SELECT_NOTES, (username, limit, offset))
-    notes = cursor.fetchall()
-    if notes is None:
+    cursor.execute(sql.SELECT_BY_MATCH, (matchid,))
+    favourites = cursor.fetchall()
+    if favourites is None:
         return None
 
-    return notes
-
-def add_note(conn, note):
-    """add new note"""
-
-    cursor = conn.cursor()
-    cursor.execute(sql.INSERT_NOTE, (
-        note['uuid'],
-        note['user'],
-        note['ctime'],
-        note['atime'],
-        note['title'],
-        note['text']
-    ))
+    return favourites
 
 
-def update_note(conn, note):
-    """update existing note"""
+def add_favourite(conn, userid, matchid):
+    """add favourite"""
 
     cursor = conn.cursor()
-    cursor.execute(sql.UPDATE_NOTE, (
-        note['user'],
-        note['ctime'],
-        note['atime'],
-        note['title'],
-        note['text'],
-        note['uuid']
-    ))
+    cursor.execute(sql.INSERT_FAVOURITE, (userid, matchid))
 
-
-def delete_note(conn, uuid):
-    """delete existing note"""
+def delete_favourite(conn, id):
+    """delete favourite"""
 
     cursor = conn.cursor()
-    cursor.execute(sql.DELETE_NOTE, (uuid,))
+    cursor.execute(sql.DELETE_FAVOURITE, (id,))
