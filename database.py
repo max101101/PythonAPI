@@ -21,6 +21,7 @@ def init(conn):
 
     cursor = conn.cursor()
     cursor.execute(sql.CREATE_FAVOURITES)
+    cursor.execute(sql.CREATE_NOTIFICATIONS)
     conn.commit()
     conn.close()
 
@@ -29,7 +30,7 @@ def get_favourites_by_userid(conn, userid):
     """get favourites by userid"""
 
     cursor = conn.cursor()
-    cursor.execute(sql.SELECT_BY_USER, (userid,))
+    cursor.execute(sql.SELECT_FAVOURITES_BY_USER, (userid,))
     favourites = cursor.fetchall()
     if favourites is None:
         return None
@@ -40,7 +41,7 @@ def get_favourites_by_matchid(conn, matchid):
     """get favourites by matchid"""
 
     cursor = conn.cursor()
-    cursor.execute(sql.SELECT_BY_MATCH, (matchid,))
+    cursor.execute(sql.SELECT_FAVOURITES_BY_MATCH, (matchid,))
     favourites = cursor.fetchall()
     if favourites is None:
         return None
@@ -59,3 +60,26 @@ def delete_favourite(conn, id):
 
     cursor = conn.cursor()
     cursor.execute(sql.DELETE_FAVOURITE, (id,))
+
+
+def get_notification(conn, matchid):
+    """get notification"""
+
+    cursor = conn.cursor()
+    cursor.execute(sql.SELECT_NOTIFICATION, (matchid,))
+    return cursor.fetchone()
+
+
+def add_notification(conn, matchid):
+    """add notification"""
+
+    cursor = conn.cursor()
+    cursor.execute(sql.INSERT_NOTIFICATION, (matchid, 0))
+ 
+
+def update_notification(conn, matchid, events):
+    """update notification"""
+
+    cursor = conn.cursor()
+    cursor.execute(sql.UPDATE_NOTIFICATION, (events, matchid))
+ 
